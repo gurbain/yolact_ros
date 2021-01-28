@@ -63,6 +63,7 @@ class YolactNode(Node):
             ('score_threshold', self.score_threshold_),
             ('crop_masks', self.crop_masks_),
             ('top_k', self.top_k_),
+            ('keep_class_list', self.keep_class_list_),
             ('publish_namespace', '/yolact_ros2')
         ])
         publish_ns = self.get_parameter('publish_namespace')._value
@@ -136,9 +137,9 @@ class YolactNode(Node):
         self.score_threshold_ = 0.0
         self.crop_masks_ = True
         self.top_k_ = True
+        self.keep_class_list_ = [0, 1, 2, 3, 7, 13, 15, 16, 17, 18, 19]
 
         # Set the QoS Profile:
-
         self.qos_profile = qos.QoSProfile(depth=1, reliability=qos.QoSReliabilityPolicy.BEST_EFFORT)
 
     def setParams_(self):
@@ -157,6 +158,7 @@ class YolactNode(Node):
         self.score_threshold_ = self.get_parameter('score_threshold')._value
         self.crop_masks_ = self.get_parameter('crop_masks')._value
         self.top_k_ = self.get_parameter('top_k')._value
+        self.keep_class_list_ = self.get_parameter('keep_class_list')._value
 
     def parameter_callback_(self, params):
         model_path_changed = False
@@ -206,6 +208,9 @@ class YolactNode(Node):
                 continue
             if (param.name == 'top_k' and param.type_ == param.Type.BOOL):
                 self.top_k_ = param.value
+                continue
+            if (param.name == 'keep_class_list' and param.type_ == param.Type.LIST):
+                self.keep_class_list_ = param.value
 
         self.get_logger().warn('****PARAMETERS CHANGED****')
 
@@ -215,8 +220,9 @@ class YolactNode(Node):
         return SetParametersResult(successful=True)
 
     def set_subscription_(self):
+
         if (self.use_compressed_image_):
-            self.create_subscription(CompressedImage, '/compressed', self.img_callback_,
+            self.create_subscription(CompressedImage, self.image_topic_ + '/compressed', self.img_callback_,
                 qos_profile=self.qos_profile)
         else:
             self.create_subscription(Image, self.image_topic_, self.img_callback_,
@@ -234,19 +240,20 @@ class YolactNode(Node):
             self.unpause_visualization.clear()
 
     def img_callback_(self, msg):
-
         try:
             if (self.use_compressed_image_):
                 np_arr = np.fromstring(msg.data, np.uint8)
                 cv_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
             else:
-                cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+                cv_image = self.bridge.imgmsg_to_cv2(msg)
+                cv_image = cv2.cvtColor(cv_image, cv2.COLOR_GRAY2BGR)
         except CvBridgeError as e:
             self.get_logger().error(e)
 
         self.evalimage_(cv_image, msg.header)
 
     def evalimage_(self, cv_image, image_header):
+
         from utils.augmentations import BaseTransform, FastBaseTransform, Resize
         with torch.no_grad():
             frame = torch.from_numpy(cv_image).cuda().float()
@@ -263,6 +270,7 @@ class YolactNode(Node):
                     self.last_reset_time = now
                     self.frame_counter = 0
                 self.frame_counter += 1
+                #self.get_logger().info(str(self.fps))
 
             if (self.publish_visualization_ or self.display_visualization_):
                 image = self.prep_display_(classes, scores, boxes, masks, frame, fps_str=str(self.fps))
@@ -280,7 +288,7 @@ class YolactNode(Node):
                     image.header = image_header
                     self.image_pub.publish(image)
                 except CvBridgeError as e:
-                    print(e)
+                    self.get_logger().warning(e)
 
     def postprocess_results_(self, dets_out, w, h):
         from utils import timer
@@ -302,7 +310,10 @@ class YolactNode(Node):
                 masks = t[3][idx]
             classes, scores, boxes = [x[idx].cpu().numpy() for x in t[:3]]
 
-        return classes, scores, boxes, masks
+        # Filter over the classes
+        ids = [i for i, c in enumerate(classes) if c in self.keep_class_list_]
+
+        return classes[ids], scores[ids], boxes[ids], masks[ids]
 
     def prep_display_(self, classes, scores, boxes, masks, img, class_color=False, mask_alpha=0.45, fps_str=''):
         from data import cfg, COLORS

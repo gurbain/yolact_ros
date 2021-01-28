@@ -1,18 +1,19 @@
 yolact_ros2_node:
   ros__parameters:
-    yolact_path: /home/fernando/ros2_ws/src/my_pkgs/yolact_ros/yolact_ros2/yolact
-    model_path: /home/fernando/ros2_ws/src/my_pkgs/yolact_ros/yolact_ros2/yolact/weights/yolact_base_54_800000.pth
-    image_topic: /camera/color/image_raw
+    yolact_path: /home/gurbain/dev/treebot_data_acquisition/src/exobot-navigation/yolact_ros/yolact_ros2/yolact
+    model_path: /home/gurbain/dev/treebot_data_acquisition/src/exobot-navigation/yolact_ros/yolact_ros2/yolact/weights/yolact_base_54_800000.pth
+    image_topic: /t265/fisheye1/image_rect
     use_compressed_image: False
     publish_visualization: True
     publish_detections: True
-    display_visualization: True
+    display_visualization: False
     display_masks: True
     display_bboxes: True
     display_text: True
     display_scores: True
     display_fps: True
-    score_threshold: 0.0
+    score_threshold: 0.1
     crop_masks: True
     top_k: 5
-    publish_namespace: /yolact_ros2
+    classes: [0, 1, 2, 3, 7, 13, 15, 16, 17, 18, 19]
+    publish_namespace: /t265/fisheye1/yolact

@@ -15,7 +15,7 @@ setup(
         # Include our package.xml file
         (os.path.join('share', package_name), ['package.xml']),
         # Include all launch files.
-        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml'))
     ],
     # This is important as well
